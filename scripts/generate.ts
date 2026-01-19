@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { Resvg } from '@resvg/resvg-js';
 import * as turf from '@turf/turf';
 import type {
     Feature,
@@ -9,6 +10,8 @@ import type {
     Point,
 } from 'geojson';
 import proj4 from 'proj4';
+import { createElement as h } from 'react';
+import satori from 'satori';
 
 // Define projections
 const WGS84 = 'EPSG:4326';
@@ -1041,6 +1044,254 @@ function generateSVG(
     return svg;
 }
 
+async function generateOGImage(
+    meta: Meta,
+    fontData: ArrayBuffer,
+    fontBoldData: ArrayBuffer,
+): Promise<Buffer> {
+    const width = 1200;
+    const height = 630;
+
+    // Calculate percentages
+    const percentComplete = Math.round(
+        (meta.completedCoverageMiles / meta.totalLengthMiles) * 100,
+    );
+    const percentConstruction = Math.round(
+        (meta.constructionCoverageMiles / meta.totalLengthMiles) * 100,
+    );
+    const percentUpgraded = Math.round(
+        (meta.upgradedCorridorMiles / meta.totalLengthMiles) * 100,
+    );
+    const percentPlanned = Math.round(
+        (meta.plannedMiles / meta.totalLengthMiles) * 100,
+    );
+
+    // Colors matching Tailwind
+    const colors = {
+        amber: '#fcd34d', // amber-300
+        amberBg: '#92400e', // amber-800
+        barBg: '#27272a', // zinc-800
+        bg: '#09090b', // zinc-950
+        completed: '#22c55e', // green-500
+        construction: '#eab308', // yellow-500
+        planned: '#dc2626', // red-600
+        text: '#ffffff',
+        textMuted: '#a1a1aa', // zinc-400
+        upgraded: '#3b82f6', // blue-500
+    };
+
+    const legendItems = [
+        { color: colors.completed, label: `${percentComplete}% Completed` },
+        {
+            color: colors.construction,
+            label: `${percentConstruction}% Under Construction`,
+        },
+        {
+            color: colors.upgraded,
+            label: `${percentUpgraded}% Upgraded Corridor`,
+        },
+        { color: colors.planned, label: `${percentPlanned}% Planned` },
+    ];
+
+    // Create the SVG using satori with h()
+    const svg = await satori(
+        h(
+            'div',
+            {
+                style: {
+                    backgroundColor: colors.bg,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    fontFamily: 'Rubik',
+                    height: '100%',
+                    justifyContent: 'space-between',
+                    padding: '60px 80px',
+                    width: '100%',
+                },
+            },
+            h(
+                'div',
+                {
+                    style: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                    },
+                },
+                h(
+                    'div',
+                    {
+                        style: {
+                            color: colors.text,
+                            fontSize: 32,
+                            fontWeight: 700,
+                        },
+                    },
+                    'Are We Rail Yet?',
+                ),
+                h(
+                    'div',
+                    {
+                        style: {
+                            display: 'flex',
+                            transform: 'rotate(-5deg)',
+                        },
+                    },
+                    h(
+                        'div',
+                        {
+                            style: {
+                                backgroundColor: colors.amberBg,
+                                borderRadius: 8,
+                                color: colors.amber,
+                                fontSize: 56,
+                                fontWeight: 700,
+                                padding: '12px 32px',
+                            },
+                        },
+                        'Not yet.',
+                    ),
+                ),
+            ),
+            h(
+                'div',
+                {
+                    style: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 24,
+                    },
+                },
+                h(
+                    'div',
+                    {
+                        style: {
+                            backgroundColor: colors.barBg,
+                            borderRadius: 24,
+                            display: 'flex',
+                            height: 48,
+                            overflow: 'hidden',
+                            width: '100%',
+                        },
+                    },
+                    h('div', {
+                        style: {
+                            backgroundColor: colors.completed,
+                            height: '100%',
+                            width: `${percentComplete}%`,
+                        },
+                    }),
+                    h('div', {
+                        style: {
+                            backgroundColor: colors.construction,
+                            height: '100%',
+                            width: `${percentConstruction}%`,
+                        },
+                    }),
+                    h('div', {
+                        style: {
+                            backgroundColor: colors.upgraded,
+                            height: '100%',
+                            width: `${percentUpgraded}%`,
+                        },
+                    }),
+                    h('div', {
+                        style: {
+                            backgroundColor: colors.planned,
+                            height: '100%',
+                            width: `${percentPlanned}%`,
+                        },
+                    }),
+                ),
+                h(
+                    'div',
+                    {
+                        style: {
+                            display: 'flex',
+                            gap: 32,
+                        },
+                    },
+                    ...legendItems.map((item) =>
+                        h(
+                            'div',
+                            {
+                                key: item.label,
+                                style: {
+                                    alignItems: 'center',
+                                    display: 'flex',
+                                    gap: 8,
+                                },
+                            },
+                            h('div', {
+                                style: {
+                                    backgroundColor: item.color,
+                                    borderRadius: 4,
+                                    height: 24,
+                                    width: 24,
+                                },
+                            }),
+                            h(
+                                'span',
+                                {
+                                    style: {
+                                        color: colors.text,
+                                        fontSize: 18,
+                                    },
+                                },
+                                item.label,
+                            ),
+                        ),
+                    ),
+                ),
+                h(
+                    'div',
+                    {
+                        style: {
+                            color: colors.textMuted,
+                            fontSize: 24,
+                        },
+                    },
+                    `California High-Speed Rail Phase 1: ${meta.totalLengthMiles} miles from San Francisco to Los Angeles`,
+                ),
+            ),
+            h(
+                'div',
+                {
+                    style: {
+                        color: colors.textMuted,
+                        fontSize: 20,
+                    },
+                },
+                'arewerailyet.com',
+            ),
+        ),
+        {
+            fonts: [
+                {
+                    data: fontData,
+                    name: 'Rubik',
+                    style: 'normal',
+                    weight: 400,
+                },
+                {
+                    data: fontBoldData,
+                    name: 'Rubik',
+                    style: 'normal',
+                    weight: 700,
+                },
+            ],
+            height,
+            width,
+        },
+    );
+
+    // Convert SVG to PNG using resvg
+    const resvg = new Resvg(svg, {
+        fitTo: { mode: 'width', value: width },
+    });
+    const pngData = resvg.render();
+    return pngData.asPng();
+}
+
 async function main(): Promise<void> {
     console.log('Starting California HSR data generation...\n');
 
@@ -1435,6 +1686,26 @@ async function main(): Promise<void> {
     const metaPath = path.join(generatedDir, 'meta.json');
     fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
     console.log(`Wrote meta to ${metaPath}`);
+
+    // Generate OG image (PNG for social media compatibility)
+    console.log('\n=== Generating OG Image ===');
+    // Download Rubik font from Google Fonts
+    const fontUrl =
+        'https://fonts.gstatic.com/s/rubik/v31/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-B4i1UA.ttf';
+    const fontBoldUrl =
+        'https://fonts.gstatic.com/s/rubik/v31/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-4I-1UA.ttf';
+    console.log('  Downloading Rubik font...');
+    const [fontResponse, fontBoldResponse] = await Promise.all([
+        fetch(fontUrl),
+        fetch(fontBoldUrl),
+    ]);
+    const fontData = await fontResponse.arrayBuffer();
+    const fontBoldData = await fontBoldResponse.arrayBuffer();
+    console.log('  Generating image...');
+    const ogImagePng = await generateOGImage(meta, fontData, fontBoldData);
+    const ogImagePath = path.join(generatedDir, 'og-image.png');
+    fs.writeFileSync(ogImagePath, ogImagePng);
+    console.log(`Wrote OG image to ${ogImagePath}`);
 
     console.log('\n=== Generation Complete ===');
     console.log(`Alignment features (Phase 1): ${meta.alignmentFeatures}`);
