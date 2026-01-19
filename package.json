@@ -1,0 +1,33 @@
+{
+    "dependencies": {
+        "@astrojs/react": "^4.4.2",
+        "@tailwindcss/vite": "^4.1.18",
+        "@types/react": "^19.2.8",
+        "@types/react-dom": "^19.2.3",
+        "astro": "^5.16.11",
+        "lucide-react": "^0.562.0",
+        "react": "^19.2.3",
+        "react-dom": "^19.2.3",
+        "tailwindcss": "^4.1.18"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.3.11",
+        "@turf/turf": "^7.3.2",
+        "@types/geojson": "^7946.0.16",
+        "@types/node": "^25.0.9",
+        "proj4": "^2.20.2",
+        "tsx": "^4.21.0"
+    },
+    "name": "arewerailyet",
+    "scripts": {
+        "astro": "astro",
+        "build": "pnpm generate && astro build",
+        "dev": "astro dev",
+        "check": "biome check",
+        "generate": "tsx scripts/generate.ts",
+        "lint": "biome lint .",
+        "preview": "astro preview"
+    },
+    "type": "module",
+    "version": "0.0.1"
+}

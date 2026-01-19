@@ -1,0 +1,143 @@
+---
+import '../styles/global.css';
+// biome-ignore lint/correctness/noUnusedImports: Import used
+import InteractiveMap from '../components/InteractiveMap';
+import { meta } from '../generated/route';
+// biome-ignore lint/correctness/noUnusedImports: Import used
+import Route from '../generated/route.svg';
+// biome-ignore lint/correctness/noUnusedImports: Import used
+import routeSvgUrl from '../generated/route.svg?url';
+
+// biome-ignore lint/correctness/noUnusedVariables: Astro variable used in template
+const percentComplete = Math.round(
+    (meta.completedCoverageMiles / meta.totalLengthMiles) * 100,
+);
+// biome-ignore lint/correctness/noUnusedVariables: Astro variable used in template
+const percentConstruction = Math.round(
+    (meta.constructionCoverageMiles / meta.totalLengthMiles) * 100,
+);
+// biome-ignore lint/correctness/noUnusedVariables: Astro variable used in template
+const percentUpgraded = Math.round(
+    (meta.upgradedCorridorMiles / meta.totalLengthMiles) * 100,
+);
+// biome-ignore lint/correctness/noUnusedVariables: Astro variable used in template
+const percentPlanned = Math.round(
+    (meta.plannedMiles / meta.totalLengthMiles) * 100,
+);
+---
+
+<!doctype html>
+<html lang="en" class="bg-zinc-950 text-white font-sans">
+    <head>
+        <meta charset="utf-8" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <meta name="viewport" content="width=device-width" />
+        <meta name="generator" content={Astro.generator} />
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet">
+        <title>Are We Rail Yet?</title>
+    </head>
+    <body class="bg-zinc-950 text-white font-sans m-0 flex min-h-screen w-full justify-center p-4 md:p-8">
+        <main class="w-full max-w-4xl flex flex-col gap-8">
+            <!-- Hero -->
+            <div class="flex py-16 items-center gap-8">
+                <div class="flex gap-4 flex-col">
+                    <h1 class="text-5xl font-bold">
+                        Are We Rail Yet?
+                    </h1>
+                    <h2 class="-rotate-5 self-start text-8xl font-bold text-amber-300 bg-amber-800 px-2 py-1 rounded-md">
+                        Not yet.
+                    </h2>
+                </div>
+                <div class="grow" />
+                <div class="w-64 h-64 scale-150 rounded-md p-2 items-center justify-center hidden lg:flex">
+                    <Route class="h-full w-full *:stroke-8" />
+                </div>
+            </div>
+
+            <!-- Progress Stats -->
+            <div class="flex flex-col gap-6">
+                <h2 class="text-3xl font-semibold">
+                    Progress
+                </h2>
+                
+                <!-- Progress Bar -->
+                <div class="w-full h-8 bg-zinc-800 rounded-full overflow-hidden flex">
+                    <div 
+                        class="h-full bg-green-500 transition-all duration-500"
+                        style={`width: ${percentComplete}%`}
+                    ></div>
+                    <div 
+                        class="h-full bg-yellow-500 transition-all duration-500"
+                        style={`width: ${percentConstruction}%`}
+                    ></div>
+                    <div 
+                        class="h-full bg-blue-500 transition-all duration-500"
+                        style={`width: ${percentUpgraded}%`}
+                    ></div>
+                    <div 
+                        class="h-full bg-red-600 transition-all duration-500"
+                        style={`width: ${percentPlanned}%`}
+                    ></div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Completed -->
+                    {([
+                        { name: 'Completed', color: 'text-green-500', miles: meta.completedCoverageMiles, km: meta.completedCoverageKm, percent: percentComplete },
+                        { name: 'Under Construction', color: 'text-yellow-500', miles: meta.constructionCoverageMiles, km: meta.constructionCoverageKm, percent: percentConstruction },
+                        { name: 'Upgraded Corridor', color: 'text-blue-500', miles: meta.upgradedCorridorMiles, km: meta.upgradedCorridorKm, percent: percentUpgraded },
+                        { name: 'Planned', color: 'text-red-600', miles: meta.plannedMiles, km: meta.plannedKm, percent: percentPlanned },
+                    ]).map(({ name, color, miles, km, percent }) => (
+                        <div class="bg-zinc-900 rounded-xl p-6 border border-zinc-800 flex flex-col gap-1">
+                            <span class="text-zinc-400 text-sm uppercase tracking-wide">{name}</span>
+                            <div class="flex items-end gap-1">
+                                <span class={`text-4xl font-bold ${color}`}>{miles}</span>
+                                <span class="text-xl text-zinc-500">mi</span>
+                            </div>
+                            <div class="text-zinc-500 text-sm">{km} km · {percent}%</div>
+                        </div>
+                    ))}
+                </div>
+
+                <!-- Total -->
+                <div class="text-center text-zinc-500">
+                    Total Phase 1 route: <span class="text-white font-semibold">{meta.totalLengthMiles} miles</span> ({meta.totalLengthKm} km)
+                </div>
+            </div>
+
+            <!-- Details -->
+            <div class="flex flex-col gap-4">
+                <h2 class="text-3xl font-semibold">
+                    About California High-Speed Rail
+                </h2>
+                <p class="text-zinc-400">
+                    California's ambitious high-speed rail project aims to connect Los Angeles and San Francisco with trains capable of speeds up to 220 mph (354 km/h). Phase 1 will run from San Francisco to Los Angeles/Anaheim. Despite significant planning and construction efforts, the project has faced numerous delays and budget challenges. The Central Valley segment is currently under active construction, while the Caltrain corridor (San Francisco to San Jose) has been electrified in preparation for future HSR service.
+                </p>
+            </div>
+
+            <!-- Interactive Map -->
+            <div class="flex flex-col gap-4">
+                <h2 class="text-3xl font-semibold">
+                    Interactive Map
+                </h2>
+                <div class="w-full h-100 md:h-120 lg:h-160">
+                    <InteractiveMap client:load src={routeSvgUrl} alt="California high-speed rail Phase 1 route map" />
+                </div>
+            </div>
+
+            <!-- Notices -->
+            <div class="flex flex-row gap-4 text-zinc-500 text-sm py-8">
+                <p>
+                    Data is current as of {meta.lastUpdated}.
+                </p>
+                <div class="grow" />
+                <p>
+                    Created by <a href="https://josh.bashed.sh" class="underline hover:text-white">Josh</a>.
+                </p>
+            </div>
+        </main>
+    </body>
+</html>
