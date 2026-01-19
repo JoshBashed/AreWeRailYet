@@ -132,7 +132,7 @@ const CONFIG = {
     alignmentSimplifyTolerance: 0.0015, // keep branch detail in overview map
     // Per-point radius intervals (replaces cluster-based approach)
     // Larger radii needed because points represent project locations, not precise guideway coverage
-    completedRadiusKm: 0.8, // Each completed point covers ±0.8 km
+    completedRadiusKm: 1.2, // Each completed point covers ±1.2 km (increased to capture ~80mi completed guideway)
     constructionRadiusKm: 0.8, // Each construction point covers ±0.8 km
     enableGapFilling: true,
     // Gap-filling: if two snapped points are within this distance, fill the gap
@@ -275,9 +275,18 @@ function distance(a: number[], b: number[]): number {
     return Math.sqrt(dx * dx + dy * dy);
 }
 
+interface MergedLineResult {
+    mainLine: Feature<LineString>;
+    mercedBranch: Feature<LineString> | null;
+    combinedLine: Feature<LineString>; // For snapping purposes (MultiLineString semantics via coords)
+    totalLengthKm: number;
+    mainLineLengthKm: number;
+    mercedBranchLengthKm: number;
+}
+
 function mergeLineStrings(
     features: Feature<LineString | MultiLineString>[],
-): Feature<LineString> {
+): MergedLineResult {
     // Extract all individual line segments
     const segments: number[][][] = [];
 
@@ -293,7 +302,15 @@ function mergeLineStrings(
     }
 
     if (segments.length === 0) {
-        return turf.lineString([[0, 0]]);
+        const emptyLine = turf.lineString([[0, 0]]);
+        return {
+            combinedLine: emptyLine,
+            mainLine: emptyLine,
+            mainLineLengthKm: 0,
+            mercedBranch: null,
+            mercedBranchLengthKm: 0,
+            totalLengthKm: 0,
+        };
     }
 
     // First, dedupe each segment internally to remove back-and-forth within segments
@@ -313,17 +330,28 @@ function mergeLineStrings(
         })
         .filter((seg) => seg.length >= 2);
 
-    // Sort segments by their starting latitude (north to south for CA HSR)
-    cleanedSegments.sort((a, b) => {
-        const aLat = a[0][1];
-        const bLat = b[0][1];
-        return bLat - aLat; // North to south
-    });
+    // Find the segment closest to SF (northwest terminus of Phase 1)
+    // SF 4th & King is at approximately (-122.394, 37.776)
+    const SF_COORD = [-122.394, 37.776];
+    let startIdx = 0;
+    let minDistToSF = Number.POSITIVE_INFINITY;
+
+    for (let i = 0; i < cleanedSegments.length; i++) {
+        const seg = cleanedSegments[i];
+        // Check both endpoints
+        for (const coord of [seg[0], seg[seg.length - 1]]) {
+            const dist = distance(coord, SF_COORD);
+            if (dist < minDistToSF) {
+                minDistToSF = dist;
+                startIdx = i;
+            }
+        }
+    }
 
     // Greedy algorithm to stitch segments together
-    // Start with the northernmost segment
-    const result: number[][] = [...cleanedSegments[0]];
-    const used = new Set<number>([0]);
+    // Start from SF to ensure main corridor is included, Merced branch added via gap-free stitching
+    const result: number[][] = [...cleanedSegments[startIdx]];
+    const used = new Set<number>([startIdx]);
 
     while (used.size < cleanedSegments.length) {
         const resultEnd = result[result.length - 1];
@@ -372,7 +400,8 @@ function mergeLineStrings(
     }
 
     // Global deduplication - remove any point that revisits an area
-    const gridSize = 0.001; // ~100m grid cells
+    // Use finer grid to preserve the Merced branch near the junction
+    const gridSize = 0.0005; // ~50m grid cells (finer to preserve branch detail)
     const visited = new Map<string, number>(); // grid cell -> index in cleaned array
     const cleaned: number[][] = [];
 
@@ -388,8 +417,36 @@ function mergeLineStrings(
         // If we've been here before, skip it entirely (strict dedup)
     }
 
-    // Find the southernmost point (highest y in SVG = lowest latitude)
-    // and cut off everything after it - this removes any backtrack to the north
+    // Collect Merced branch coordinates separately before any trimming
+    // Merced branch: longitude -120.6 to -120.3, latitude 37.08 to 37.35
+    const mercedBranchCoords: number[][] = [];
+    for (const seg of cleanedSegments) {
+        for (const coord of seg) {
+            if (
+                coord[0] > -120.6 &&
+                coord[0] < -120.3 &&
+                coord[1] > 37.08 &&
+                coord[1] < 37.35
+            ) {
+                mercedBranchCoords.push(coord);
+            }
+        }
+    }
+
+    // Dedupe Merced branch
+    const mercedDeduped: number[][] = [];
+    const mercedVisited = new Set<string>();
+    for (const coord of mercedBranchCoords) {
+        const key = `${Math.round(coord[0] / gridSize)},${Math.round(coord[1] / gridSize)}`;
+        if (!mercedVisited.has(key)) {
+            mercedVisited.add(key);
+            mercedDeduped.push(coord);
+        }
+    }
+    // Sort Merced branch by latitude (south to north)
+    mercedDeduped.sort((a, b) => a[1] - b[1]);
+
+    // Find the southernmost point and trim to avoid backtracking past LA
     let southernmostIdx = 0;
     let lowestLat = cleaned[0][1];
 
@@ -400,13 +457,59 @@ function mergeLineStrings(
         }
     }
 
-    // Only keep points up to (and including) the southernmost point
-    const trimmed = cleaned.slice(0, southernmostIdx + 1);
+    // Trim at the southernmost point (LA terminus)
+    let mainLine = cleaned.slice(0, southernmostIdx + 1);
 
-    console.log(
-        `  Stitched ${segments.length} segments into ${trimmed.length} points (cleaned from ${result.length}, trimmed from ${cleaned.length})`,
-    );
-    return turf.lineString(trimmed);
+    // Check how much of Merced branch is already in mainLine
+    const mainLineSet = new Set<string>();
+    for (const coord of mainLine) {
+        const key = `${Math.round(coord[0] / gridSize)},${Math.round(coord[1] / gridSize)}`;
+        mainLineSet.add(key);
+    }
+
+    // Add Merced branch points that aren't already in mainLine
+    const mercedToAdd: number[][] = [];
+    for (const coord of mercedDeduped) {
+        const key = `${Math.round(coord[0] / gridSize)},${Math.round(coord[1] / gridSize)}`;
+        if (!mainLineSet.has(key)) {
+            mercedToAdd.push(coord);
+        }
+    }
+
+    // Create main line (SF to LA)
+    const mainLineFeature = turf.lineString(mainLine);
+    const mainLineLengthKm = turf.length(mainLineFeature, { units: 'kilometers' });
+
+    // Create Merced branch if we have points
+    let mercedBranchFeature: Feature<LineString> | null = null;
+    let mercedBranchLengthKm = 0;
+
+    if (mercedToAdd.length > 1) {
+        mercedBranchFeature = turf.lineString(mercedToAdd);
+        mercedBranchLengthKm = turf.length(mercedBranchFeature, { units: 'kilometers' });
+        console.log(
+            `  Stitched ${segments.length} segments: main line ${mainLine.length} pts (${mainLineLengthKm.toFixed(1)} km), Merced branch ${mercedToAdd.length} pts (${mercedBranchLengthKm.toFixed(1)} km)`,
+        );
+    } else {
+        console.log(
+            `  Stitched ${segments.length} segments into ${mainLine.length} points (${mainLineLengthKm.toFixed(1)} km)`,
+        );
+    }
+
+    // Combined line for snapping (includes both branches)
+    const combinedCoords = mercedToAdd.length > 1
+        ? [...mainLine, ...mercedToAdd]
+        : mainLine;
+    const combinedLine = turf.lineString(combinedCoords);
+
+    return {
+        combinedLine,
+        mainLine: mainLineFeature,
+        mainLineLengthKm,
+        mercedBranch: mercedBranchFeature,
+        mercedBranchLengthKm,
+        totalLengthKm: mainLineLengthKm + mercedBranchLengthKm,
+    };
 }
 
 function extractLineStrings(
@@ -973,8 +1076,10 @@ function generateSVG(
         upgraded_corridor: 'upgraded-corridor',
     };
 
-    // Merge consecutive segments with the same status
+    // Merge consecutive segments with the same status, but only if they're geographically contiguous
     const mergedSegments: { coords: number[][]; status: Status }[] = [];
+    // Threshold for considering segments contiguous (in degrees, ~1km)
+    const CONTIGUITY_THRESHOLD = 0.01;
 
     for (const segment of segments) {
         if (mergedSegments.length === 0) {
@@ -984,21 +1089,24 @@ function generateSVG(
             });
         } else {
             const last = mergedSegments[mergedSegments.length - 1];
-            if (last.status === segment.status) {
-                // Same status, merge by appending coordinates (skip first if duplicate)
-                const lastCoord = last.coords[last.coords.length - 1];
-                const firstCoord = segment.coords[0];
-                const dist = Math.sqrt(
-                    (lastCoord[0] - firstCoord[0]) ** 2 +
-                        (lastCoord[1] - firstCoord[1]) ** 2,
-                );
+            const lastCoord = last.coords[last.coords.length - 1];
+            const firstCoord = segment.coords[0];
+            const dist = Math.sqrt(
+                (lastCoord[0] - firstCoord[0]) ** 2 +
+                    (lastCoord[1] - firstCoord[1]) ** 2,
+            );
+
+            // Only merge if same status AND geographically contiguous
+            if (last.status === segment.status && dist < CONTIGUITY_THRESHOLD) {
+                // Same status and contiguous, merge by appending coordinates
                 if (dist < 0.0001) {
+                    // Very close, skip duplicate first point
                     last.coords.push(...segment.coords.slice(1));
                 } else {
                     last.coords.push(...segment.coords);
                 }
             } else {
-                // Different status, start new segment
+                // Different status OR not contiguous, start new segment
                 mergedSegments.push({
                     coords: [...segment.coords],
                     status: segment.status,
@@ -1332,21 +1440,56 @@ async function main(): Promise<void> {
     const alignmentLines = extractLineStrings(alignmentFeatures).map((line) =>
         simplifyLine(line, CONFIG.alignmentSimplifyTolerance),
     );
-    const mergedLine = mergeLineStrings(alignmentFeatures);
+    const mergedResult = mergeLineStrings(alignmentFeatures);
 
-    // Simplify the line
-    console.log('Simplifying line...');
-    const simplifiedLine = simplifyLine(mergedLine, CONFIG.simplifyTolerance);
-    const totalLengthKm = turf.length(simplifiedLine, { units: 'kilometers' });
-    console.log(`  Total length: ${totalLengthKm.toFixed(2)} km`);
+    // Simplify lines separately to avoid creating segments across the LA-to-Merced jump
+    console.log('Simplifying lines...');
+    const simplifiedMainLine = simplifyLine(mergedResult.mainLine, CONFIG.simplifyTolerance);
+    const simplifiedMercedBranch = mergedResult.mercedBranch
+        ? simplifyLine(mergedResult.mercedBranch, CONFIG.simplifyTolerance)
+        : null;
+
+    // Create a combined simplified line for snapping (coordinates only, no false jump distance)
+    const simplifiedLine = simplifiedMercedBranch
+        ? turf.lineString([
+              ...simplifiedMainLine.geometry.coordinates,
+              ...simplifiedMercedBranch.geometry.coordinates,
+          ])
+        : simplifiedMainLine;
+
+    // Use the calculated total length (main + Merced branch)
+    const totalLengthKm = mergedResult.totalLengthKm;
+    console.log(`  Total length: ${totalLengthKm.toFixed(2)} km (main + Merced branch)`);
     console.log(
-        `  Points after simplification: ${simplifiedLine.geometry.coordinates.length}`,
+        `  Main line points: ${simplifiedMainLine.geometry.coordinates.length}`,
     );
+    if (simplifiedMercedBranch) {
+        console.log(
+            `  Merced branch points: ${simplifiedMercedBranch.geometry.coordinates.length}`,
+        );
+    }
 
-    // Create segments
+    // Create segments separately for each branch (no jump segments)
     console.log('Creating segments...');
-    const segments = createSegments(simplifiedLine, CONFIG.segmentLengthKm);
-    console.log(`  Created ${segments.length} segments`);
+    const mainSegments = createSegments(simplifiedMainLine, CONFIG.segmentLengthKm);
+
+    // For Merced branch, we need to offset the startKm/endKm by the main line length
+    // so the interval painting works correctly
+    let segments = [...mainSegments];
+    if (simplifiedMercedBranch) {
+        const mercedSegments = createSegments(simplifiedMercedBranch, CONFIG.segmentLengthKm);
+        // Offset Merced branch segments by main line length
+        const mainLineLength = mergedResult.mainLineLengthKm;
+        for (const seg of mercedSegments) {
+            segments.push({
+                ...seg,
+                startKm: seg.startKm + mainLineLength,
+                endKm: seg.endKm + mainLineLength,
+                midKm: seg.midKm + mainLineLength,
+            });
+        }
+    }
+    console.log(`  Created ${segments.length} segments (main: ${mainSegments.length}, Merced: ${segments.length - mainSegments.length})`);
 
     // Filter closures and points to valid geometries
     const closures: FeatureCollection<LineString | MultiLineString> = {
