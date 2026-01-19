@@ -155,12 +155,13 @@ const percentPlanned = Math.round(
             </div>
 
             <!-- Notices -->
-            <div class="flex flex-row gap-4 text-zinc-500 text-sm py-8">
+            <div class="flex flex-col md:flex-row items-center gap-4 text-zinc-500 text-sm py-8 text-center md:text-left">
                 <p>
-                    Data is current as of {meta.lastUpdated}.
+                    Data is current as of {meta.lastUpdated}. The data is approximate and may not be accurate.
                 </p>
-                <div class="grow" />
-                <p>
+                <div class="hidden md:flex grow"></div>
+                <div class="md:hidden">•</div>
+                <p class="md:text-right">
                     Created by <a href="https://josh.bashed.sh" class="underline hover:text-white">Josh</a>.
                 </p>
             </div>
