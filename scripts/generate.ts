@@ -458,7 +458,7 @@ function mergeLineStrings(
     }
 
     // Trim at the southernmost point (LA terminus)
-    let mainLine = cleaned.slice(0, southernmostIdx + 1);
+    const mainLine = cleaned.slice(0, southernmostIdx + 1);
 
     // Check how much of Merced branch is already in mainLine
     const mainLineSet = new Set<string>();
@@ -478,7 +478,9 @@ function mergeLineStrings(
 
     // Create main line (SF to LA)
     const mainLineFeature = turf.lineString(mainLine);
-    const mainLineLengthKm = turf.length(mainLineFeature, { units: 'kilometers' });
+    const mainLineLengthKm = turf.length(mainLineFeature, {
+        units: 'kilometers',
+    });
 
     // Create Merced branch if we have points
     let mercedBranchFeature: Feature<LineString> | null = null;
@@ -486,7 +488,9 @@ function mergeLineStrings(
 
     if (mercedToAdd.length > 1) {
         mercedBranchFeature = turf.lineString(mercedToAdd);
-        mercedBranchLengthKm = turf.length(mercedBranchFeature, { units: 'kilometers' });
+        mercedBranchLengthKm = turf.length(mercedBranchFeature, {
+            units: 'kilometers',
+        });
         console.log(
             `  Stitched ${segments.length} segments: main line ${mainLine.length} pts (${mainLineLengthKm.toFixed(1)} km), Merced branch ${mercedToAdd.length} pts (${mercedBranchLengthKm.toFixed(1)} km)`,
         );
@@ -497,9 +501,8 @@ function mergeLineStrings(
     }
 
     // Combined line for snapping (includes both branches)
-    const combinedCoords = mercedToAdd.length > 1
-        ? [...mainLine, ...mercedToAdd]
-        : mainLine;
+    const combinedCoords =
+        mercedToAdd.length > 1 ? [...mainLine, ...mercedToAdd] : mainLine;
     const combinedLine = turf.lineString(combinedCoords);
 
     return {
@@ -1444,7 +1447,10 @@ async function main(): Promise<void> {
 
     // Simplify lines separately to avoid creating segments across the LA-to-Merced jump
     console.log('Simplifying lines...');
-    const simplifiedMainLine = simplifyLine(mergedResult.mainLine, CONFIG.simplifyTolerance);
+    const simplifiedMainLine = simplifyLine(
+        mergedResult.mainLine,
+        CONFIG.simplifyTolerance,
+    );
     const simplifiedMercedBranch = mergedResult.mercedBranch
         ? simplifyLine(mergedResult.mercedBranch, CONFIG.simplifyTolerance)
         : null;
@@ -1459,7 +1465,9 @@ async function main(): Promise<void> {
 
     // Use the calculated total length (main + Merced branch)
     const totalLengthKm = mergedResult.totalLengthKm;
-    console.log(`  Total length: ${totalLengthKm.toFixed(2)} km (main + Merced branch)`);
+    console.log(
+        `  Total length: ${totalLengthKm.toFixed(2)} km (main + Merced branch)`,
+    );
     console.log(
         `  Main line points: ${simplifiedMainLine.geometry.coordinates.length}`,
     );
@@ -1471,25 +1479,33 @@ async function main(): Promise<void> {
 
     // Create segments separately for each branch (no jump segments)
     console.log('Creating segments...');
-    const mainSegments = createSegments(simplifiedMainLine, CONFIG.segmentLengthKm);
+    const mainSegments = createSegments(
+        simplifiedMainLine,
+        CONFIG.segmentLengthKm,
+    );
 
     // For Merced branch, we need to offset the startKm/endKm by the main line length
     // so the interval painting works correctly
-    let segments = [...mainSegments];
+    const segments = [...mainSegments];
     if (simplifiedMercedBranch) {
-        const mercedSegments = createSegments(simplifiedMercedBranch, CONFIG.segmentLengthKm);
+        const mercedSegments = createSegments(
+            simplifiedMercedBranch,
+            CONFIG.segmentLengthKm,
+        );
         // Offset Merced branch segments by main line length
         const mainLineLength = mergedResult.mainLineLengthKm;
         for (const seg of mercedSegments) {
             segments.push({
                 ...seg,
-                startKm: seg.startKm + mainLineLength,
                 endKm: seg.endKm + mainLineLength,
                 midKm: seg.midKm + mainLineLength,
+                startKm: seg.startKm + mainLineLength,
             });
         }
     }
-    console.log(`  Created ${segments.length} segments (main: ${mainSegments.length}, Merced: ${segments.length - mainSegments.length})`);
+    console.log(
+        `  Created ${segments.length} segments (main: ${mainSegments.length}, Merced: ${segments.length - mainSegments.length})`,
+    );
 
     // Filter closures and points to valid geometries
     const closures: FeatureCollection<LineString | MultiLineString> = {
