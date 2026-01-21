@@ -41,6 +41,23 @@ const percentPlanned = Math.round(
         <meta name="description" content={`Track California High-Speed Rail Phase 1 progress: ${percentComplete}% complete (${meta.completedCoverageMiles} mi), ${percentConstruction}% under construction, ${percentUpgraded}% upgraded corridor. ${meta.totalLengthMiles} miles total from SF to LA.`} />
         <link rel="canonical" href="https://arewerailyet.com" />
 
+
+        <!-- Google tag (gtag.js) -->
+        <script
+            is:inline
+            async
+            src="https://www.googletagmanager.com/gtag/js?id=G-97W8MQLNCN"
+        ></script>
+        <script is:inline>
+            window.dataLayer = window.dataLayer || [];
+            function gtag() {
+                dataLayer.push(arguments);
+            }
+            gtag("js", new Date());
+
+            gtag("config", "G-97W8MQLNCN");
+        </script>
+
         <!-- Open Graph / Facebook -->
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://arewerailyet.com" />
