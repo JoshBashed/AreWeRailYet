@@ -39,7 +39,7 @@ const percentPlanned = Math.round(
         <!-- SEO Meta Tags -->
         <title>Are We Rail Yet? - California High-Speed Rail Progress Tracker</title>
         <meta name="description" content={`Track California High-Speed Rail Phase 1 progress: ${percentComplete}% complete (${meta.completedCoverageMiles} mi), ${percentConstruction}% under construction, ${percentUpgraded}% upgraded corridor. ${meta.totalLengthMiles} miles total from SF to LA.`} />
-        <link rel="canonical" href="https://arewerailyet.com" />
+        <link rel="canonical" href={Astro.site} />
 
 
         <!-- Google tag (gtag.js) -->
@@ -60,20 +60,20 @@ const percentPlanned = Math.round(
 
         <!-- Open Graph / Facebook -->
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://arewerailyet.com" />
+        <meta property="og:url" content={Astro.site} />
         <meta property="og:title" content="Are We Rail Yet? - California High-Speed Rail Progress" />
         <meta property="og:description" content={`${percentComplete}% complete | ${percentConstruction}% under construction | ${percentUpgraded}% upgraded corridor | ${percentPlanned}% planned`} />
-        <meta property="og:image" content={`https://arewerailyet.com${ogImageUrl}`} />
+        <meta property="og:image" content={new URL(ogImageUrl, Astro.site).toString()} />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
         <meta property="og:image:alt" content="California High-Speed Rail progress bar showing completion status" />
 
         <!-- Twitter -->
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:url" content="https://arewerailyet.com" />
+        <meta name="twitter:url" content={Astro.site} />
         <meta name="twitter:title" content="Are We Rail Yet? - California High-Speed Rail Progress" />
         <meta name="twitter:description" content={`${percentComplete}% complete | ${percentConstruction}% under construction | ${percentUpgraded}% upgraded corridor | ${percentPlanned}% planned`} />
-        <meta name="twitter:image" content={`https://arewerailyet.com${ogImageUrl}`} />
+        <meta name="twitter:image" content={new URL(ogImageUrl, Astro.site).toString()} />
         <meta name="twitter:image:alt" content="California High-Speed Rail progress bar showing completion status" />
 
         <!-- Fonts -->
